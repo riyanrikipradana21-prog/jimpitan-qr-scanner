@@ -2,98 +2,241 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Scan QR Rumah - Jimpitan</title>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<style>
-body{font-family:Arial,sans-serif;background:#061b35;color:#fff;margin:0;padding:18px}
-.panel{max-width:520px;margin:auto;background:white;color:#152536;padding:24px;border-radius:28px}
-h1{font-size:28px}
-.status{background:#eaf4ff;padding:14px;border-radius:12px;line-height:1.5}
-button{width:100%;padding:17px;margin:8px 0;border:0;border-radius:14px;background:#0878cf;color:white;font-size:18px;font-weight:bold}
-#reader{width:100%;margin-top:14px}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#061b35">
+  <title>Scan QR Rumah - Jimpitan Warga</title>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #061b35;
+      color: #fff;
+      margin: 0;
+      padding: 18px;
+    }
+
+    .panel {
+      max-width: 520px;
+      margin: 14px auto;
+      background: #fff;
+      color: #152536;
+      padding: 24px;
+      border-radius: 28px;
+    }
+
+    h1 { font-size: 28px; margin-top: 8px; }
+    .subtitle { color: #667788; font-size: 16px; }
+
+    #status {
+      background: #eaf4ff;
+      padding: 14px;
+      border-radius: 12px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+      margin: 20px 0 12px;
+    }
+
+    button {
+      width: 100%;
+      padding: 17px;
+      margin: 7px 0;
+      border: 0;
+      border-radius: 14px;
+      background: #0878cf;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:disabled { opacity: .6; }
+    #reader { width: 100%; margin-top: 14px; }
+    .hint { color: #5e6b78; line-height: 1.5; }
+    .footer { max-width: 520px; margin: 20px auto; line-height: 1.5; }
+  </style>
 </head>
+
 <body>
-<main class="panel">
-<h1>📷 Scan QR Rumah</h1>
-<p>JIMPITAN WARGA · DK PUCUNG</p>
-<div id="status" class="status">Tekan tombol untuk mengaktifkan kamera.</div>
-<button id="startBtn" type="button">Mulai / Ulangi Kamera</button>
-<button id="backBtn" type="button">Kembali tanpa scan</button>
-<div id="reader"></div>
-<p>Arahkan kamera ke QR rumah. QR cukup berisi kode rumah.</p>
-</main>
-<script>
-let scanner = null;
-let running = false;
+  <main class="panel">
+    <h1>📷 Scan QR Rumah</h1>
+    <p class="subtitle">JIMPITAN WARGA · DK PUCUNG</p>
 
-function status(message) {
-  document.getElementById("status").textContent = message;
-}
+    <div id="status" role="status" aria-live="polite">
+      Tekan tombol Mulai / Ulangi Kamera untuk memulai pemindaian.
+    </div>
 
-async function startScan() {
-  const button = document.getElementById("startBtn");
-  button.disabled = true;
-  status("Meminta akses kamera...");
+    <button id="startBtn" type="button">
+      Mulai / Ulangi Kamera
+    </button>
 
-  try {
-    if (!window.isSecureContext) {
-      throw new Error("Halaman harus dibuka melalui HTTPS.");
+    <button id="backBtn" type="button">
+      Kembali tanpa scan
+    </button>
+
+    <div id="reader"></div>
+
+    <p class="hint">
+      Arahkan kamera ke QR rumah. Setelah terbaca, kode akan dikirim
+      ke aplikasi Jimpitan jika aplikasi tersebut membuka scanner ini.
+    </p>
+  </main>
+
+  <p class="footer">
+    Gunakan halaman HTTPS. QR cukup berisi kode rumah, bukan informasi pribadi.
+  </p>
+
+  <script>
+    let scanner = null;
+    let running = false;
+    let processing = false;
+
+    const statusBox = document.getElementById("status");
+    const startBtn = document.getElementById("startBtn");
+
+    function setStatus(message) {
+      statusBox.textContent = message;
     }
-    if (typeof Html5Qrcode === "undefined") {
-      throw new Error("Library pemindai gagal dimuat. Periksa koneksi internet.");
+
+    async function startScan() {
+      if (processing) return;
+
+      startBtn.disabled = true;
+      setStatus("Menyiapkan kamera...");
+
+      try {
+        if (!window.isSecureContext) {
+          throw new Error("Halaman harus dibuka melalui HTTPS.");
+        }
+
+        if (typeof Html5Qrcode === "undefined") {
+          throw new Error(
+            "Library pemindai gagal dimuat. Periksa koneksi internet."
+          );
+        }
+
+        if (!scanner) {
+          scanner = new Html5Qrcode("reader");
+        }
+
+        if (running) {
+          await scanner.stop();
+          running = false;
+        }
+
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 230, height: 230 },
+            aspectRatio: 1
+          },
+          onQrRead,
+          () => {}
+        );
+
+        running = true;
+        setStatus("Kamera aktif. Arahkan ke QR rumah.");
+      } catch (error) {
+        setStatus(
+          "Kamera gagal dibuka: " +
+          (error && error.message ? error.message : String(error))
+        );
+      } finally {
+        startBtn.disabled = false;
+      }
     }
 
-    if (!scanner) {
-      scanner = new Html5Qrcode("reader");
-    }
-    if (running) {
-      await scanner.stop();
-      running = false;
-    }
+    async function onQrRead(decodedText) {
+      if (processing) return;
+      processing = true;
 
-    await scanner.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 230, height: 230 } },
-      (decodedText) => {
-        status("QR terbaca: " + decodedText);
-        scanner.stop().catch(() => {});
+      const code = String(decodedText || "").trim();
+
+      try {
+        if (running && scanner) {
+          await scanner.stop();
+          running = false;
+        }
+      } catch (error) {
         running = false;
+      }
 
-        if (window.opener && !window.opener.closed) {
+      if (!code) {
+        processing = false;
+        setStatus("Kode QR kosong. Silakan coba lagi.");
+        return;
+      }
+
+      if (window.opener && !window.opener.closed) {
+        try {
           window.opener.postMessage(
-            { type: "JIMPITAN_QR_RESULT", code: decodedText },
+            {
+              type: "JIMPITAN_QR_RESULT",
+              code: code
+            },
             "*"
           );
-          status("Kode terkirim ke aplikasi. Silakan kembali ke tab aplikasi.");
-        } else {
-          status("QR terbaca. Kode: " + decodedText + ". Kembali ke aplikasi Jimpitan.");
+
+          setStatus(
+            "QR berhasil dibaca: " + code +
+            ". Mengirim ke aplikasi Jimpitan..."
+          );
+
+          setTimeout(function () {
+            window.close();
+
+            // Jika browser menolak menutup tab,
+            // pesan ini tetap memberi petunjuk kepada pengguna.
+            setTimeout(function () {
+              if (!window.closed) {
+                setStatus(
+                  "Kode sudah dikirim. Jika tab belum menutup, " +
+                  "kembali ke tab aplikasi Jimpitan."
+                );
+              }
+            }, 500);
+          }, 700);
+
+        } catch (error) {
+          setStatus(
+            "QR terbaca: " + code +
+            ", tetapi pengiriman ke aplikasi gagal. " +
+            "Kembali ke aplikasi Jimpitan."
+          );
+          processing = false;
         }
-      },
-      () => {}
-    );
+      } else {
+        setStatus(
+          "QR terbaca: " + code +
+          ". Scanner tidak terhubung ke aplikasi asal. " +
+          "Buka scanner melalui tombol Mulai kamera di aplikasi Jimpitan."
+        );
+        processing = false;
+      }
+    }
 
-    running = true;
-    status("Kamera aktif. Arahkan ke QR rumah.");
-  } catch (error) {
-    status("Kamera gagal dibuka: " + (error.message || error));
-  } finally {
-    button.disabled = false;
-  }
-}
+    async function goBack() {
+      try {
+        if (running && scanner) {
+          await scanner.stop();
+          running = false;
+        }
+      } catch (error) {}
 
-function goBack() {
-  if (window.opener && !window.opener.closed) {
-    window.close();
-  } else {
-    history.back();
-  }
-}
+      if (window.opener && !window.opener.closed) {
+        window.close();
+      } else {
+        history.back();
+      }
+    }
 
-document.getElementById("startBtn").addEventListener("click", startScan);
-document.getElementById("backBtn").addEventListener("click", goBack);
-</script>
+    startBtn.addEventListener("click", startScan);
+    document.getElementById("backBtn").addEventListener("click", goBack);
+  </script>
 </body>
 </html>
