@@ -244,7 +244,14 @@ setTimeout(function () {
     }
 
     startBtn.addEventListener("click", startScan);
-    document.getElementById("backBtn").addEventListener("click", goBack);
+document.getElementById("backBtn").addEventListener("click", goBack);
+
+// Kamera langsung mulai saat halaman scanner dibuka
+window.addEventListener("load", function () {
+  setTimeout(function () {
+    startScan();
+  }, 500);
+});
   </script>
 </body>
 </html>
