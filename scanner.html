@@ -187,8 +187,25 @@
             ". Mengirim ke aplikasi Jimpitan..."
           );
 
-          setTimeout(function () {
-            window.close();
+          
+setTimeout(function () {
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.focus();
+    }
+  } catch (e) {}
+
+  window.close();
+
+  setTimeout(function () {
+    if (!window.closed) {
+      setStatus(
+        "Kode sudah dikirim. Browser tidak mengizinkan tab menutup otomatis. Kembali ke aplikasi Jimpitan."
+      );
+    }
+  }, 700);
+}, 300);
+
 
             // Jika browser menolak menutup tab,
             // pesan ini tetap memberi petunjuk kepada pengguna.
